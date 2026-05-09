@@ -1,0 +1,29 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
+
+# Local data
+postgres-data/
+redis-data/
+logs/
+backend/logs/
+*.log
+
+# Node / frontend later
+node_modules/
+.next/
+tsconfig.tsbuildinfo
+out/
