@@ -31,6 +31,29 @@ def test_anthropic_structured_output_mode_defaults_to_tool_use() -> None:
     assert settings.anthropic_structured_output_mode == "tool_use"
 
 
+def test_celery_redis_url_adds_required_tls_cert_setting() -> None:
+    settings = Settings(
+        redis_url="rediss://default:secret@oriented-silkworm-120060.upstash.io:6379",
+    )
+
+    assert (
+        settings.celery_redis_url
+        == "rediss://default:secret@oriented-silkworm-120060.upstash.io:6379"
+        "?ssl_cert_reqs=CERT_REQUIRED"
+    )
+
+
+def test_celery_redis_url_preserves_existing_ssl_cert_setting() -> None:
+    settings = Settings(
+        redis_url=(
+            "rediss://default:secret@oriented-silkworm-120060.upstash.io:6379"
+            "?ssl_cert_reqs=CERT_NONE"
+        ),
+    )
+
+    assert settings.celery_redis_url.endswith("ssl_cert_reqs=CERT_NONE")
+
+
 def test_public_config_does_not_expose_anthropic_secret() -> None:
     settings = Settings(
         llm_provider="anthropic",

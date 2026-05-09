@@ -8,8 +8,8 @@ settings = get_settings()
 
 celery_app = Celery(
     "ai_sales_teammate",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=settings.celery_redis_url,
+    backend=settings.celery_redis_url,
     include=["app.workers.approvals"],
 )
 

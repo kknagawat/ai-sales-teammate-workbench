@@ -150,6 +150,21 @@ class Settings(BaseSettings):
         return self.database_url
 
     @property
+    def celery_redis_url(self) -> str:
+        if not self.redis_url.startswith("rediss://"):
+            return self.redis_url
+
+        parts = urlsplit(self.redis_url)
+        query_pairs = parse_qsl(parts.query, keep_blank_values=True)
+        if any(key == "ssl_cert_reqs" for key, _ in query_pairs):
+            return self.redis_url
+
+        query_pairs.append(("ssl_cert_reqs", "CERT_REQUIRED"))
+        return urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query_pairs), parts.fragment)
+        )
+
+    @property
     def _database_sslmode(self) -> str | None:
         query = dict(parse_qsl(urlsplit(self.database_url).query, keep_blank_values=True))
         return query.get("sslmode")
