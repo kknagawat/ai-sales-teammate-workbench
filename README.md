@@ -25,6 +25,33 @@ Worker log file: `backend/logs/worker.log`
 
 Local reviewer signup invite code: `demo-reviewer-code` (demo-only; production startup rejects it)
 
+## Free Deployment
+
+The root `render.yaml` is configured for a no-paid-Render-services deployment:
+
+- Vercel free hosts the Next.js frontend.
+- Render free hosts one Python web service.
+- The Render web service runs both FastAPI and Celery in one process group via `backend/scripts/render_free_start.sh`.
+- Neon or Supabase free provides Postgres.
+- Upstash free provides Redis.
+
+This is intentionally a demo-friendly deployment shape. It avoids a paid Render background worker, but it means the worker sleeps whenever the Render free web service sleeps. For a production deployment, run the API and worker as separate always-on services.
+
+Render Blueprint inputs:
+
+- `FRONTEND_ORIGIN`: your Vercel production URL, for example `https://your-app.vercel.app`
+- `DATABASE_URL`: Neon/Supabase Postgres connection string
+- `REDIS_URL`: Upstash Redis connection string
+- `REVIEWER_INVITE_CODE`: a private 12+ character invite code
+
+The start command runs migrations before starting the app:
+
+```bash
+uv run alembic upgrade head && bash scripts/render_free_start.sh
+```
+
+If you use Neon and the URL includes `?sslmode=require`, the backend normalizes it for async SQLAlchemy while preserving a sync-compatible URL for the Celery worker.
+
 ## Architecture
 
 - Frontend: Next.js App Router with a same-origin `/api/backend/*` proxy.
@@ -174,6 +201,7 @@ pnpm typecheck
 - Idempotency cleanup is not automated yet.
 - The local rate limiter does not coordinate across multiple backend processes.
 - Worker logs are local rotated files, not centralized structured observability.
+- The free deployment runs the API and worker inside one Render web service, so both sleep together on Render's free tier.
 - Signup does not verify email ownership yet.
 - Reviewer signup uses one demo invite code across organizations. A production version should use per-organization invite records with expiry, single-use consumption, and audit history.
 - Signup and organization creation are not written to `audit_logs` yet; the audit trail currently focuses on work-item review and processing actions.

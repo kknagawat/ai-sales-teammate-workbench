@@ -1,21 +1,13 @@
 services:
-  - type: keyvalue
-    name: ai-sales-teammate-redis
-    region: oregon
-    plan: starter
-    ipAllowList: []
-    maxmemoryPolicy: allkeys-lru
-
   - type: web
     runtime: python
     name: ai-sales-teammate-api
     rootDir: backend
     branch: main
     region: oregon
-    plan: starter
+    plan: free
     buildCommand: uv sync --frozen --no-dev
-    preDeployCommand: uv run alembic upgrade head
-    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uv run alembic upgrade head && bash scripts/render_free_start.sh
     healthCheckPath: /health
     autoDeployTrigger: commit
     envVars:
@@ -26,14 +18,9 @@ services:
       - key: FRONTEND_ORIGIN
         sync: false
       - key: DATABASE_URL
-        fromDatabase:
-          name: ai-sales-teammate-db
-          property: connectionString
+        sync: false
       - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ai-sales-teammate-redis
-          property: connectionString
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: AUTH_COOKIE_SECURE
@@ -48,6 +35,8 @@ services:
         value: none
       - key: APPROVAL_JOB_STALE_AFTER_SECONDS
         value: 300
+      - key: CELERY_CONCURRENCY
+        value: 1
       - key: LLM_PROVIDER
         value: mock
       - key: LLM_MOCK_ENABLED
@@ -74,78 +63,3 @@ services:
         value: 1024
       - key: LLM_EXPOSE_PROVIDER_THINKING_SUMMARY
         value: false
-
-  - type: worker
-    runtime: python
-    name: ai-sales-teammate-worker
-    rootDir: backend
-    branch: main
-    region: oregon
-    plan: starter
-    buildCommand: uv sync --frozen --no-dev
-    startCommand: uv run celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
-    autoDeployTrigger: commit
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.11
-      - key: ENVIRONMENT
-        value: production
-      - key: FRONTEND_ORIGIN
-        sync: false
-      - key: DATABASE_URL
-        fromDatabase:
-          name: ai-sales-teammate-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: ai-sales-teammate-redis
-          property: connectionString
-      - key: JWT_SECRET
-        generateValue: true
-      - key: AUTH_COOKIE_SECURE
-        value: true
-      - key: AUTH_COOKIE_SAMESITE
-        value: lax
-      - key: REVIEWER_INVITE_CODE
-        sync: false
-      - key: SIGNUP_DEMO_DATA_ENABLED
-        value: true
-      - key: APPROVAL_WORKER_FAILURE_MODE
-        value: none
-      - key: APPROVAL_JOB_STALE_AFTER_SECONDS
-        value: 300
-      - key: LLM_PROVIDER
-        value: mock
-      - key: LLM_MOCK_ENABLED
-        value: true
-      - key: LLM_ALLOW_MOCK_FALLBACK
-        value: true
-      - key: MOCK_LLM_FAILURE_MODE
-        value: none
-      - key: LLM_RUNTIME_SWITCHING_ENABLED
-        value: false
-      - key: ANTHROPIC_VALIDATE_MODEL_ON_STARTUP
-        value: false
-      - key: ANTHROPIC_STRUCTURED_OUTPUT_MODE
-        value: tool_use
-      - key: LLM_STRUCTURED_OUTPUTS_ENABLED
-        value: true
-      - key: LLM_DECISION_TRACE_ENABLED
-        value: true
-      - key: LLM_EXTENDED_THINKING_ENABLED
-        value: false
-      - key: LLM_THINKING_MODE
-        value: off
-      - key: LLM_THINKING_BUDGET_TOKENS
-        value: 1024
-      - key: LLM_EXPOSE_PROVIDER_THINKING_SUMMARY
-        value: false
-
-databases:
-  - name: ai-sales-teammate-db
-    region: oregon
-    plan: free
-    databaseName: ai_sales_teammate
-    postgresMajorVersion: "15"
-    ipAllowList: []

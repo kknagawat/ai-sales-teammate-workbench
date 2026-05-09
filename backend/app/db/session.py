@@ -9,6 +9,7 @@ settings = get_settings()
 
 async_engine = create_async_engine(
     settings.async_database_url,
+    connect_args=settings.async_database_connect_args,
     poolclass=NullPool,
     pool_pre_ping=True,
     future=True,

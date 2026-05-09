@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from pydantic import BaseModel, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -128,9 +129,17 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        if self.database_url.startswith("postgresql://"):
-            return self.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return self.database_url
+        url = self.database_url
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return self._without_asyncpg_incompatible_sslmode(url)
+
+    @property
+    def async_database_connect_args(self) -> dict[str, bool]:
+        sslmode = self._database_sslmode
+        if sslmode in {"require", "verify-ca", "verify-full"}:
+            return {"ssl": True}
+        return {}
 
     @property
     def sync_database_url(self) -> str:
@@ -139,6 +148,24 @@ class Settings(BaseSettings):
         if self.database_url.startswith("postgresql://"):
             return self.database_url.replace("postgresql://", "postgresql+psycopg://", 1)
         return self.database_url
+
+    @property
+    def _database_sslmode(self) -> str | None:
+        query = dict(parse_qsl(urlsplit(self.database_url).query, keep_blank_values=True))
+        return query.get("sslmode")
+
+    @staticmethod
+    def _without_asyncpg_incompatible_sslmode(url: str) -> str:
+        parts = urlsplit(url)
+        incompatible_query_keys = {"channel_binding", "sslmode"}
+        query_pairs = [
+            (key, value)
+            for key, value in parse_qsl(parts.query, keep_blank_values=True)
+            if key not in incompatible_query_keys
+        ]
+        return urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query_pairs), parts.fragment)
+        )
 
     @property
     def anthropic_configured(self) -> bool:
