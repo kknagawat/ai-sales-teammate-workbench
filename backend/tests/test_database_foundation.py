@@ -14,6 +14,15 @@ def test_sync_database_url_is_derived_from_async_url() -> None:
     assert settings.sync_database_url == "postgresql+psycopg://user:pass@localhost:5432/dbname"
 
 
+def test_database_urls_are_derived_from_render_postgres_url() -> None:
+    settings = Settings(
+        database_url="postgresql://user:pass@internal-host:5432/dbname",
+    )
+
+    assert settings.async_database_url == "postgresql+asyncpg://user:pass@internal-host:5432/dbname"
+    assert settings.sync_database_url == "postgresql+psycopg://user:pass@internal-host:5432/dbname"
+
+
 def test_model_metadata_imports_all_batch_1_tables() -> None:
     assert {
         "organizations",
