@@ -237,8 +237,9 @@ pnpm typecheck
 
 ## Live URL
 
-Not deployed yet.
+- Frontend: https://ai-sales-teammate-workbench.vercel.app/login
+- Backend API: https://ai-sales-teammate-api.onrender.com
 
 ## Loom URL
 
-Not recorded yet.
+https://www.loom.com/share/e1a9ae3eefd042f5ac378c1e7a0c9e78
