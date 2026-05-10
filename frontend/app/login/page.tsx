@@ -2,9 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { Bot, Building2, CheckCircle2, Loader2, LockKeyhole, ShieldCheck, UserPlus, UserRound } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { AuthResponse } from "@/lib/types";
+import type { AuthResponse, PublicConfig } from "@/lib/types";
 import { Button, ErrorNotice, FieldLabel, Panel, TextInput } from "@/components/ui";
 
 const demoAccounts = [
@@ -39,14 +40,21 @@ type SignupMode = "CREATE_ORG_ADMIN" | "JOIN_ORG_REVIEWER";
 
 export default function LoginPage() {
   const router = useRouter();
+  const config = useQuery({
+    queryKey: ["public-config"],
+    queryFn: () => apiFetch<PublicConfig>("/config/public"),
+    retry: false
+  });
+  const showSeededDemoAccounts =
+    config.data?.environment === undefined || config.data.environment !== "production";
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [signupMode, setSignupMode] = useState<SignupMode>("CREATE_ORG_ADMIN");
   const [name, setName] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [inviteCode, setInviteCode] = useState("");
-  const [email, setEmail] = useState(demoAccounts[0].email);
-  const [password, setPassword] = useState(demoAccounts[0].password);
-  const [organizationSlug, setOrganizationSlug] = useState(demoAccounts[0].organization_slug);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [organizationSlug, setOrganizationSlug] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -95,10 +103,12 @@ export default function LoginPage() {
       setPassword("");
       setOrganizationSlug("");
     } else {
-      const account = demoAccounts[0];
-      setEmail(account.email);
-      setPassword(account.password);
-      setOrganizationSlug(account.organization_slug);
+      if (showSeededDemoAccounts) {
+        const account = demoAccounts[0];
+        setEmail(account.email);
+        setPassword(account.password);
+        setOrganizationSlug(account.organization_slug);
+      }
     }
   }
 
@@ -162,7 +172,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          {authMode === "login" ? (
+          {authMode === "login" && showSeededDemoAccounts ? (
             <div className="mb-5 grid grid-cols-2 gap-3">
               {demoAccounts.map((account) => (
                 <button
