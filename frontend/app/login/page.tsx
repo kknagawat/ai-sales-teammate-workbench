@@ -231,56 +231,62 @@ export default function LoginPage() {
           <form onSubmit={submit} className="space-y-4">
             {authMode === "signup" ? (
               <div>
-                <FieldLabel>Name</FieldLabel>
+                <FieldLabel>Name *</FieldLabel>
                 <TextInput
                   value={name}
                   autoComplete="name"
+                  required
                   onChange={(event) => setName(event.target.value)}
                 />
               </div>
             ) : null}
             {authMode === "signup" && signupMode === "CREATE_ORG_ADMIN" ? (
               <div>
-                <FieldLabel>Organization name</FieldLabel>
+                <FieldLabel>Organization name *</FieldLabel>
                 <TextInput
                   value={organizationName}
                   autoComplete="organization"
+                  required
                   onChange={(event) => setOrganizationName(event.target.value)}
                 />
               </div>
             ) : null}
             <div>
-              <FieldLabel>Email</FieldLabel>
+              <FieldLabel>Email *</FieldLabel>
               <TextInput
                 value={email}
                 type="email"
                 autoComplete="username"
+                required
                 onChange={(event) => setEmail(event.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Password</FieldLabel>
+              <FieldLabel>Password *</FieldLabel>
               <TextInput
                 value={password}
                 type="password"
                 autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                required
                 onChange={(event) => setPassword(event.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Organization slug</FieldLabel>
+              <FieldLabel>Organization slug *</FieldLabel>
               <TextInput
                 value={organizationSlug}
+                required
                 onChange={(event) => setOrganizationSlug(event.target.value)}
               />
             </div>
             {authMode === "signup" && signupMode === "JOIN_ORG_REVIEWER" ? (
               <div>
-                <FieldLabel>Invite code</FieldLabel>
+                <FieldLabel>Invite code *</FieldLabel>
                 <TextInput
                   value={inviteCode}
                   type="password"
                   autoComplete="one-time-code"
+                  required
                   onChange={(event) => setInviteCode(event.target.value)}
                 />
               </div>
