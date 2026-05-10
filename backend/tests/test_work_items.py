@@ -11,7 +11,7 @@ from app.models.background_job import BackgroundJob
 from app.models.enums import BackgroundJobStatus, LLMRunStatus, WorkItemStatus
 from app.models.lead_work_item import LeadWorkItem
 from app.models.user import User
-from app.work_items.state_machine import WorkItemAction, can_perform_action
+from app.work_items.state_machine import WorkItemAction, can_perform_action, can_transition
 
 
 @pytest.fixture(autouse=True)
@@ -431,6 +431,11 @@ def test_state_machine_allows_retry_processing_for_processing_recovery() -> None
     assert can_perform_action(WorkItemStatus.PROCESSING, WorkItemAction.RETRY_PROCESSING)
 
 
+def test_state_machine_allows_reopening_rejected_items() -> None:
+    assert can_perform_action(WorkItemStatus.REJECTED, WorkItemAction.REOPEN)
+    assert can_transition(WorkItemStatus.REJECTED, WorkItemStatus.PENDING_REVIEW)
+
+
 def test_approve_requires_idempotency_key(seeded_database) -> None:
     client = TestClient(app)
     _login(client, "reviewer@acme.example")
@@ -588,6 +593,8 @@ def test_regenerate_adds_llm_run_and_returns_pending(seeded_database) -> None:
     assert run["structured_output"]["quality_checks"]["has_clear_cta"] is True
     assert run["latency_ms"] is not None
     assert run["token_usage"]["input_tokens"] > 0
+    assert "I also incorporated this reviewer feedback" not in response.json()["final_draft"]
+    assert "Tighter CTA please." not in response.json()["final_draft"]
 
 
 def test_regeneration_failure_restores_pending_and_records_failed_run(
@@ -661,6 +668,39 @@ def test_reject_moves_item_to_rejected(seeded_database) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "REJECTED"
+
+
+def test_reopen_rejected_item_returns_it_to_pending_review(seeded_database) -> None:
+    client = TestClient(app)
+    _login(client, "reviewer@acme.example")
+    item = _first_item_for_user("reviewer@acme.example", WorkItemStatus.PENDING_REVIEW)
+
+    rejected = client.post(
+        f"/work-items/{item.id}/reject",
+        json={"last_seen_version": item.version, "reviewer_note": "Needs another pass."},
+    )
+    reopened = client.post(
+        f"/work-items/{item.id}/reopen",
+        json={
+            "last_seen_version": rejected.json()["version"],
+            "reviewer_note": "Reopened after reviewer reconsidered.",
+        },
+    )
+    edit = client.patch(
+        f"/work-items/{item.id}/draft",
+        json={
+            "last_seen_version": reopened.json()["version"],
+            "final_draft": "Subject: Reopened\n\nUpdated draft",
+        },
+    )
+    audit_response = client.get(f"/work-items/{item.id}/audit")
+
+    assert rejected.status_code == 200
+    assert reopened.status_code == 200
+    assert reopened.json()["status"] == "PENDING_REVIEW"
+    assert edit.status_code == 200
+    assert edit.json()["final_draft"] == "Subject: Reopened\n\nUpdated draft"
+    assert any(log["action"] == "ITEM_REOPENED" for log in audit_response.json()["items"])
 
 
 def test_non_admin_cannot_access_admin_endpoints(seeded_database) -> None:

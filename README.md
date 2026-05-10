@@ -135,6 +135,7 @@ Important actions are persisted in `audit_logs`, scoped by organization:
 - `DRAFT_EDITED`
 - `ITEM_APPROVED`
 - `ITEM_REJECTED`
+- `ITEM_REOPENED`
 - `JOB_STARTED`
 - `JOB_COMPLETED`
 - `JOB_FAILED`
@@ -173,6 +174,9 @@ The assignment implementation includes server-side authz, tenant scoping, httpOn
 ## Security Notes
 
 - The browser never receives `ANTHROPIC_API_KEY` or raw provider payloads.
+- Passwords are sent only in HTTPS requests to the backend, then hashed server-side before
+  storage. Browser DevTools can show a user's own request body; that cannot be disabled by a
+  web app and is not the same as sending plaintext over the network.
 - Mutating backend requests require an allowed `Origin`; the Next.js proxy forwards browser origins and only synthesizes an origin for same-origin browser requests that include `Sec-Fetch-Site: same-origin`.
 - API responses include basic security headers such as `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and a restrictive API CSP.
 - Lead and CRM fields are treated as untrusted input in the Anthropic prompt. They are JSON-encoded and wrapped in `<lead_profile>` tags with instructions to treat tagged content as data, not model instructions.

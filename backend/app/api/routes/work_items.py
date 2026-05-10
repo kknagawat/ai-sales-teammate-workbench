@@ -597,6 +597,40 @@ async def reject_work_item(
     return await _current_detail(session, current_user, work_item_id)
 
 
+@router.post("/work-items/{work_item_id}/reopen", response_model=WorkItemDetail)
+async def reopen_work_item(
+    work_item_id: UUID,
+    payload: DecisionRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> WorkItemDetail:
+    item = await get_accessible_work_item(session, current_user, work_item_id, for_update=True)
+    _check_version(item, payload.last_seen_version)
+    _check_action(item, WorkItemAction.REOPEN)
+
+    item.status = WorkItemStatus.PENDING_REVIEW
+    if payload.reviewer_note is not None:
+        item.reviewer_note = payload.reviewer_note
+    item.version += 1
+    session.add(
+        _audit(
+            item,
+            actions.ITEM_REOPENED,
+            actor=current_user,
+            metadata=_action_metadata(
+                item,
+                current_user,
+                {"reviewer_note": payload.reviewer_note},
+            ),
+            request=request,
+        )
+    )
+    await session.commit()
+
+    return await _current_detail(session, current_user, work_item_id)
+
+
 @router.post("/work-items/{work_item_id}/approve", response_model=WorkItemDetail)
 async def approve_work_item(
     work_item_id: UUID,

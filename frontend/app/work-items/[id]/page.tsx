@@ -406,6 +406,19 @@ export default function WorkItemDetailPage() {
     onError: (error) => setActionError(detailFromError(error, "Rejection failed."))
   });
 
+  const reopen = useMutation({
+    mutationFn: () =>
+      apiFetch<WorkItemDetail>(`/work-items/${params.id}/reopen`, {
+        method: "POST",
+        json: {
+          reviewer_note: reviewerNote || null,
+          last_seen_version: item.data?.version
+        }
+      }),
+    onSuccess: refreshAll,
+    onError: (error) => setActionError(detailFromError(error, "Reopen failed."))
+  });
+
   const retryProcessing = useMutation({
     mutationFn: () =>
       apiFetch<WorkItemDetail>(`/work-items/${params.id}/retry-processing`, {
@@ -434,6 +447,7 @@ export default function WorkItemDetailPage() {
   const personalization = profile.personalization ?? {};
   const crm = profile.crm ?? {};
   const isGenerating = regenerate.isPending || current?.status === "REGENERATING";
+  const canEditReviewerNote = Boolean(current && (canAct || current.status === "REJECTED"));
 
   if (!user) {
     return <main className="min-h-screen bg-paper" />;
@@ -570,11 +584,21 @@ export default function WorkItemDetailPage() {
                     <TextArea
                       value={reviewerNote}
                       onChange={(event) => setReviewerNote(event.target.value)}
-                      disabled={!canAct}
+                      disabled={!canEditReviewerNote}
                       rows={5}
                       placeholder="Optional note"
                     />
                     <div className="mt-3 flex flex-wrap gap-2">
+                      {current.status === "REJECTED" ? (
+                        <Button onClick={() => reopen.mutate()} disabled={reopen.isPending}>
+                          {reopen.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-4 w-4" />
+                          )}
+                          Reopen for review
+                        </Button>
+                      ) : null}
                       <Button
                         onClick={() => approve.mutate()}
                         disabled={!canAct || approve.isPending || isGenerating}

@@ -58,17 +58,13 @@ def generate_mock_followup(lead_profile: dict, feedback: str | None = None) -> G
     qualification = lead_profile["qualification"]
     signal = lead_profile["source_signal"]
     personalization = lead_profile["personalization"]
-    feedback_sentence = (
-        f" I also incorporated this reviewer feedback: {feedback}." if feedback else ""
-    )
 
     body = (
         f"Hi {contact['first_name']},\n\n"
         f"I noticed {company['name']} recently showed interest through {signal['source'].lower()}. "
         f"Given your focus on {qualification['pain_points'][0].lower()}, it may be useful "
         "to look at a reviewer-controlled AI follow-up workflow before your team scales "
-        "this further."
-        f"{feedback_sentence}\n\n"
+        "this further.\n\n"
         "The workflow keeps the AI teammate responsible for drafting and rationale, while the "
         "human reviewer owns approval and final edits.\n\n"
         f"{personalization['suggested_cta']}\n\n"
@@ -76,7 +72,7 @@ def generate_mock_followup(lead_profile: dict, feedback: str | None = None) -> G
     )
     summary = (
         f"Generated at {datetime.now(UTC).isoformat()} using lead signal, qualification, "
-        "and reviewer feedback."
+        f"and {'reviewer feedback' if feedback else 'standard review guidance'}."
     )
     return GenerationResult(
         subject=f"Following up on {company['name']}'s review workflow",

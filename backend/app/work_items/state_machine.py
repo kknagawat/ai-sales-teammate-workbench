@@ -8,6 +8,7 @@ class WorkItemAction(StrEnum):
     REGENERATE = "REGENERATE"
     APPROVE = "APPROVE"
     REJECT = "REJECT"
+    REOPEN = "REOPEN"
     RETRY_PROCESSING = "RETRY_PROCESSING"
 
 
@@ -25,7 +26,7 @@ VALID_TRANSITIONS: dict[WorkItemStatus, set[WorkItemStatus]] = {
         WorkItemStatus.REJECTED,
     },
     WorkItemStatus.SENT: set(),
-    WorkItemStatus.REJECTED: set(),
+    WorkItemStatus.REJECTED: {WorkItemStatus.PENDING_REVIEW},
 }
 
 VALID_ACTIONS: dict[WorkItemStatus, set[WorkItemAction]] = {
@@ -45,7 +46,7 @@ VALID_ACTIONS: dict[WorkItemStatus, set[WorkItemAction]] = {
     WorkItemStatus.REGENERATING: set(),
     WorkItemStatus.PROCESSING: {WorkItemAction.RETRY_PROCESSING},
     WorkItemStatus.SENT: set(),
-    WorkItemStatus.REJECTED: set(),
+    WorkItemStatus.REJECTED: {WorkItemAction.REOPEN},
 }
 
 
