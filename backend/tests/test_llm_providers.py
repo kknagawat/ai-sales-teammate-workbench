@@ -204,7 +204,22 @@ async def test_anthropic_provider_validates_tool_output_and_sanitizes_metadata()
     call = fake_client.messages.calls[0]
     assert call["tool_choice"] == {"type": "tool", "name": "generate_followup"}
     assert "server-side-secret" not in str(call)
+    system_prompt = call["system"]
+    assert "Generate only a plain-text sales email." in system_prompt
+    assert "No Markdown." in system_prompt
+    assert "No bold text." in system_prompt
+    assert "No headings." in system_prompt
+    assert "No bullet list unless the reviewer explicitly asks for one." in system_prompt
+    assert (
+        "Do not invent metrics, benchmarks, customer results, or product claims."
+        in system_prompt
+    )
+    assert "Keep the email body between 90 and 150 words." in system_prompt
+    assert "Use 2-4 short paragraphs." in system_prompt
+    assert "Use one clear CTA." in system_prompt
+    assert "Sound human, specific, and low-pressure." in system_prompt
     user_prompt = call["messages"][0]["content"]
+    assert "send-ready plain text" in user_prompt
     assert "<lead_profile>" in user_prompt
     assert "</lead_profile>" in user_prompt
     assert '"contact"' in user_prompt
