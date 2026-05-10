@@ -52,6 +52,18 @@ uv run alembic upgrade head && bash scripts/render_free_start.sh
 
 If you use Neon and the URL includes `?sslmode=require`, the backend normalizes it for async SQLAlchemy while preserving a sync-compatible URL for the Celery worker.
 
+## CI/CD
+
+CI runs through GitHub Actions on every push and pull request to `main`.
+
+- Backend job: starts Postgres 15 and Redis 7 service containers, installs with `uv`, runs Alembic migrations, `ruff`, `pytest`, and `compileall`.
+- Frontend job: installs with `pnpm`, then runs `pnpm lint`, `pnpm typecheck`, and `pnpm build`.
+
+CD is platform-managed instead of custom-scripted:
+
+- Vercel deploys the frontend from `main`.
+- Render deploys the backend from `main` using the root `render.yaml`.
+
 ## Architecture
 
 - Frontend: Next.js App Router with a same-origin `/api/backend/*` proxy.
