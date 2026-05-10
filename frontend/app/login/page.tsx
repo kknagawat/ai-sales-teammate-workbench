@@ -38,6 +38,14 @@ const demoAccounts = [
 type AuthMode = "login" | "signup";
 type SignupMode = "CREATE_ORG_ADMIN" | "JOIN_ORG_REVIEWER";
 
+function RequiredLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <FieldLabel>
+      {children} <span className="text-coral">*</span>
+    </FieldLabel>
+  );
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const config = useQuery({
@@ -231,7 +239,7 @@ export default function LoginPage() {
           <form onSubmit={submit} className="space-y-4">
             {authMode === "signup" ? (
               <div>
-                <FieldLabel>Name *</FieldLabel>
+                <RequiredLabel>Name</RequiredLabel>
                 <TextInput
                   value={name}
                   autoComplete="name"
@@ -242,7 +250,7 @@ export default function LoginPage() {
             ) : null}
             {authMode === "signup" && signupMode === "CREATE_ORG_ADMIN" ? (
               <div>
-                <FieldLabel>Organization name *</FieldLabel>
+                <RequiredLabel>Organization name</RequiredLabel>
                 <TextInput
                   value={organizationName}
                   autoComplete="organization"
@@ -252,7 +260,7 @@ export default function LoginPage() {
               </div>
             ) : null}
             <div>
-              <FieldLabel>Email *</FieldLabel>
+              <RequiredLabel>Email</RequiredLabel>
               <TextInput
                 value={email}
                 type="email"
@@ -262,7 +270,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <FieldLabel>Password *</FieldLabel>
+              <RequiredLabel>Password</RequiredLabel>
               <TextInput
                 value={password}
                 type="password"
@@ -272,7 +280,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <FieldLabel>Organization slug *</FieldLabel>
+              <RequiredLabel>Organization slug</RequiredLabel>
               <TextInput
                 value={organizationSlug}
                 required
@@ -281,7 +289,7 @@ export default function LoginPage() {
             </div>
             {authMode === "signup" && signupMode === "JOIN_ORG_REVIEWER" ? (
               <div>
-                <FieldLabel>Invite code *</FieldLabel>
+                <RequiredLabel>Invite code</RequiredLabel>
                 <TextInput
                   value={inviteCode}
                   type="password"
