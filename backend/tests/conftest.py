@@ -9,6 +9,7 @@ os.environ["ANTHROPIC_API_KEY"] = ""
 os.environ["ANTHROPIC_MODEL"] = ""
 os.environ["ANTHROPIC_VALIDATE_MODEL_ON_STARTUP"] = "false"
 os.environ["CORS_EXTRA_ORIGINS"] = "[]"
+os.environ["REVIEWER_INVITE_CODE"] = "demo-reviewer-code"
 
 import pytest
 

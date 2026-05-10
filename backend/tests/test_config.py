@@ -246,7 +246,12 @@ def test_access_token_roundtrip() -> None:
 
 def test_production_rejects_default_jwt_secret() -> None:
     with pytest.raises(ValidationError):
-        Settings(environment="production", auth_cookie_secure=True)
+        Settings(
+            environment="production",
+            jwt_secret="local-dev-secret-change-me",
+            auth_cookie_secure=True,
+            reviewer_invite_code="production-reviewer-code",
+        )
 
 
 def test_production_requires_secure_auth_cookie() -> None:
