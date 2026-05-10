@@ -13,53 +13,87 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
+
       - key: ENVIRONMENT
         value: production
+
       - key: FRONTEND_ORIGIN
         sync: false
+
+      - key: CORS_EXTRA_ORIGINS
+        sync: false
+
       - key: DATABASE_URL
         sync: false
+
       - key: REDIS_URL
         sync: false
+
       - key: JWT_SECRET
         generateValue: true
+
       - key: AUTH_COOKIE_SECURE
         value: true
+
       - key: AUTH_COOKIE_SAMESITE
         value: lax
+
       - key: REVIEWER_INVITE_CODE
         sync: false
+
       - key: SIGNUP_DEMO_DATA_ENABLED
         value: true
+
       - key: APPROVAL_WORKER_FAILURE_MODE
         value: none
+
       - key: APPROVAL_JOB_STALE_AFTER_SECONDS
         value: 300
+
       - key: CELERY_CONCURRENCY
         value: 1
+
       - key: LLM_PROVIDER
-        value: mock
+        value: anthropic
+
+      - key: LLM_RUNTIME_SWITCHING_ENABLED
+        value: true
+
       - key: LLM_MOCK_ENABLED
         value: true
+
       - key: LLM_ALLOW_MOCK_FALLBACK
         value: true
+
       - key: MOCK_LLM_FAILURE_MODE
         value: none
-      - key: LLM_RUNTIME_SWITCHING_ENABLED
-        value: false
+
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
+      - key: ANTHROPIC_MODEL
+        sync: false
+
       - key: ANTHROPIC_VALIDATE_MODEL_ON_STARTUP
         value: false
+
       - key: ANTHROPIC_STRUCTURED_OUTPUT_MODE
         value: tool_use
+
       - key: LLM_STRUCTURED_OUTPUTS_ENABLED
         value: true
+
       - key: LLM_DECISION_TRACE_ENABLED
         value: true
+
       - key: LLM_EXTENDED_THINKING_ENABLED
         value: false
+
       - key: LLM_THINKING_MODE
         value: off
+
       - key: LLM_THINKING_BUDGET_TOKENS
         value: 1024
+
       - key: LLM_EXPOSE_PROVIDER_THINKING_SUMMARY
         value: false
