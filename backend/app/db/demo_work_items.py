@@ -1,6 +1,7 @@
 from copy import deepcopy
 from datetime import UTC, datetime
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.audit import actions
@@ -11,6 +12,7 @@ from app.models.enums import (
     LLMProviderMode,
     LLMRequestType,
     LLMRunStatus,
+    UserRole,
     WorkItemStatus,
 )
 from app.models.lead_work_item import LeadWorkItem
@@ -19,23 +21,42 @@ from app.models.organization import Organization
 from app.models.user import User
 
 
-async def create_signup_demo_work_items(
+def _signup_demo_work_item_ids():
+    return (
+        select(LLMGenerationRun.work_item_id)
+        .where(LLMGenerationRun.provider_raw_metadata.contains({"signup_demo": True}))
+        .distinct()
+    )
+
+
+async def ensure_signup_demo_work_items(
     session: AsyncSession,
     *,
     organization: Organization,
-    assignee: User,
+    actor: User,
     count: int = 5,
 ) -> None:
+    existing_demo_item_id = await session.scalar(
+        select(LeadWorkItem.id)
+        .where(
+            LeadWorkItem.organization_id == organization.id,
+            LeadWorkItem.id.in_(_signup_demo_work_item_ids()),
+        )
+        .limit(1)
+    )
+    if existing_demo_item_id is not None:
+        return
+
     scenarios = _scenario_data()[:count]
     for index, scenario in enumerate(scenarios, start=1):
         profile = deepcopy(scenario["profile"])
-        profile["crm"]["owner_name"] = assignee.name
+        profile["crm"]["owner_name"] = organization.name
         result = _generation_result(profile)
         draft = f"Subject: {result['subject']}\n\n{result['email_body']}"
 
         item = LeadWorkItem(
             organization_id=organization.id,
-            assigned_reviewer_id=assignee.id,
+            assigned_reviewer_id=None,
             status=WorkItemStatus.PENDING_REVIEW,
             ai_draft=draft,
             final_draft=draft,
@@ -89,7 +110,7 @@ async def create_signup_demo_work_items(
             AuditLog(
                 organization_id=organization.id,
                 work_item_id=item.id,
-                actor_user_id=assignee.id,
+                actor_user_id=actor.id,
                 action=actions.ITEM_CREATED,
                 metadata_json={"source": "signup_demo"},
                 ip_address="127.0.0.1",
@@ -100,7 +121,7 @@ async def create_signup_demo_work_items(
             AuditLog(
                 organization_id=organization.id,
                 work_item_id=item.id,
-                actor_user_id=assignee.id,
+                actor_user_id=actor.id,
                 action=actions.AI_DRAFT_GENERATED,
                 metadata_json={
                     "generation_run_id": str(generation_run.id),
@@ -110,3 +131,32 @@ async def create_signup_demo_work_items(
                 user_agent="signup-demo-bootstrap",
             )
         )
+
+
+async def assign_signup_demo_work_items_to_reviewer(
+    session: AsyncSession,
+    *,
+    organization: Organization,
+    reviewer: User,
+) -> int:
+    admin_user_ids = select(User.id).where(
+        User.organization_id == organization.id,
+        User.role == UserRole.ADMIN,
+    )
+    stmt = (
+        select(LeadWorkItem)
+        .where(
+            LeadWorkItem.organization_id == organization.id,
+            LeadWorkItem.id.in_(_signup_demo_work_item_ids()),
+            or_(
+                LeadWorkItem.assigned_reviewer_id.is_(None),
+                LeadWorkItem.assigned_reviewer_id.in_(admin_user_ids),
+            ),
+        )
+        .order_by(LeadWorkItem.created_at.asc())
+        .with_for_update()
+    )
+    items = list(await session.scalars(stmt))
+    for item in items:
+        item.assigned_reviewer_id = reviewer.id
+    return len(items)

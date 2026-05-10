@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.rate_limit import login_rate_limiter, signup_rate_limiter
@@ -8,7 +8,7 @@ from app.core.config import get_settings
 from app.core.security import hash_password
 from app.db.sync_session import sync_session_factory
 from app.main import app
-from app.models.enums import UserRole
+from app.models.enums import UserRole, WorkItemStatus
 from app.models.lead_work_item import LeadWorkItem
 from app.models.llm_generation_run import LLMGenerationRun
 from app.models.organization import Organization
@@ -83,57 +83,276 @@ def test_signup_creates_new_organization_admin_and_logs_in(seeded_database) -> N
         assert user is not None
         assert user.role == UserRole.ADMIN
         item_count = session.scalar(
-            select(LeadWorkItem)
+            select(func.count())
+            .select_from(LeadWorkItem)
             .where(LeadWorkItem.organization_id == org.id)
-            .limit(1)
+        )
+        assigned_item_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(
+                LeadWorkItem.organization_id == org.id,
+                LeadWorkItem.assigned_reviewer_id.is_not(None),
+            )
         )
         run_count = session.scalar(
-            select(LLMGenerationRun)
+            select(func.count())
+            .select_from(LLMGenerationRun)
             .join(LeadWorkItem, LLMGenerationRun.work_item_id == LeadWorkItem.id)
             .where(LeadWorkItem.organization_id == org.id)
-            .limit(1)
         )
-        assert item_count is not None
-        assert run_count is not None
+        assert item_count == 5
+        assert assigned_item_count == 0
+        assert run_count == 5
 
 
 def test_signup_reviewer_joins_existing_org_with_invite_code(seeded_database) -> None:
-    client = _client()
+    admin_client = _client()
+    admin_response = admin_client.post(
+        "/auth/signup",
+        json={
+            "mode": "CREATE_ORG_ADMIN",
+            "organization_name": "Shared Demo Co",
+            "organization_slug": "shared-demo-co",
+            "name": "Shared Admin",
+            "email": "shared.admin@example.com",
+            "password": "StrongPass123!",
+        },
+    )
+    assert admin_response.status_code == 201, admin_response.text
 
+    with sync_session_factory() as session:
+        org = session.scalar(select(Organization).where(Organization.slug == "shared-demo-co"))
+        assert org is not None
+        original_items = list(
+            session.scalars(
+                select(LeadWorkItem)
+                .where(LeadWorkItem.organization_id == org.id)
+                .order_by(LeadWorkItem.created_at.asc())
+            )
+        )
+        assert len(original_items) == 5
+        sent_item = original_items[0]
+        sent_item.status = WorkItemStatus.SENT
+        original_item_ids = {item.id for item in original_items}
+        sent_item_id = sent_item.id
+        sent_item_email = sent_item.lead_email
+        before_count = len(original_items)
+        session.commit()
+
+    client = _client()
     response = client.post(
         "/auth/signup",
         json={
             "mode": "JOIN_ORG_REVIEWER",
-            "organization_slug": "acme",
+            "organization_slug": "shared-demo-co",
             "invite_code": "demo-reviewer-code",
             "name": "New Reviewer",
-            "email": "new.reviewer@acme.example",
+            "email": "new.reviewer@shared-demo.example",
+            "password": "StrongPass123!",
+        },
+    )
+    queue_response = client.get("/work-items")
+
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["role"] == "REVIEWER"
+    assert queue_response.status_code == 200
+    with sync_session_factory() as session:
+        org = session.scalar(select(Organization).where(Organization.slug == "shared-demo-co"))
+        assert org is not None
+        user = session.scalar(
+            select(User).where(
+                User.organization_id == org.id,
+                User.email == "new.reviewer@shared-demo.example",
+            )
+        )
+        assert user is not None
+        assert user.role == UserRole.REVIEWER
+        after_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(LeadWorkItem.organization_id == org.id)
+        )
+        assigned_items = list(
+            session.scalars(
+                select(LeadWorkItem).where(
+                    LeadWorkItem.organization_id == org.id,
+                    LeadWorkItem.assigned_reviewer_id == user.id,
+                )
+            )
+        )
+        duplicate_lead_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(
+                LeadWorkItem.organization_id == org.id,
+                LeadWorkItem.lead_email == sent_item_email,
+            )
+        )
+        sent_item_after_signup = session.get(LeadWorkItem, sent_item_id)
+        assert after_count == before_count
+        assert {item.id for item in assigned_items} == original_item_ids
+        assert sent_item_after_signup is not None
+        assert sent_item_after_signup.status == WorkItemStatus.SENT
+        assert duplicate_lead_count == 1
+
+    queue_items = queue_response.json()["items"]
+    assert any(item["id"] == str(sent_item_id) and item["status"] == "SENT" for item in queue_items)
+
+
+def test_second_signup_reviewer_does_not_steal_assigned_demo_items(seeded_database) -> None:
+    admin_client = _client()
+    admin_response = admin_client.post(
+        "/auth/signup",
+        json={
+            "mode": "CREATE_ORG_ADMIN",
+            "organization_name": "Stable Assignment Co",
+            "organization_slug": "stable-assignment-co",
+            "name": "Stable Admin",
+            "email": "stable.admin@example.com",
+            "password": "StrongPass123!",
+        },
+    )
+    assert admin_response.status_code == 201, admin_response.text
+
+    first_reviewer_client = _client()
+    first_response = first_reviewer_client.post(
+        "/auth/signup",
+        json={
+            "mode": "JOIN_ORG_REVIEWER",
+            "organization_slug": "stable-assignment-co",
+            "invite_code": "demo-reviewer-code",
+            "name": "First Reviewer",
+            "email": "first.reviewer@stable.example",
+            "password": "StrongPass123!",
+        },
+    )
+    second_reviewer_client = _client()
+    second_response = second_reviewer_client.post(
+        "/auth/signup",
+        json={
+            "mode": "JOIN_ORG_REVIEWER",
+            "organization_slug": "stable-assignment-co",
+            "invite_code": "demo-reviewer-code",
+            "name": "Second Reviewer",
+            "email": "second.reviewer@stable.example",
+            "password": "StrongPass123!",
+        },
+    )
+
+    assert first_response.status_code == 201, first_response.text
+    assert second_response.status_code == 201, second_response.text
+    with sync_session_factory() as session:
+        org = session.scalar(
+            select(Organization).where(Organization.slug == "stable-assignment-co")
+        )
+        assert org is not None
+        first_reviewer = session.scalar(
+            select(User).where(
+                User.organization_id == org.id,
+                User.email == "first.reviewer@stable.example",
+            )
+        )
+        second_reviewer = session.scalar(
+            select(User).where(
+                User.organization_id == org.id,
+                User.email == "second.reviewer@stable.example",
+            )
+        )
+        assert first_reviewer is not None
+        assert second_reviewer is not None
+        first_assigned_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(
+                LeadWorkItem.organization_id == org.id,
+                LeadWorkItem.assigned_reviewer_id == first_reviewer.id,
+            )
+        )
+        second_assigned_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(
+                LeadWorkItem.organization_id == org.id,
+                LeadWorkItem.assigned_reviewer_id == second_reviewer.id,
+            )
+        )
+        total_item_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(LeadWorkItem.organization_id == org.id)
+        )
+
+        assert first_assigned_count == 5
+        assert second_assigned_count == 0
+        assert total_item_count == 5
+
+
+def test_signup_reviewer_repairs_old_admin_assigned_demo_items(seeded_database) -> None:
+    admin_client = _client()
+    admin_response = admin_client.post(
+        "/auth/signup",
+        json={
+            "mode": "CREATE_ORG_ADMIN",
+            "organization_name": "Legacy Demo Co",
+            "organization_slug": "legacy-demo-co",
+            "name": "Legacy Admin",
+            "email": "legacy.admin@example.com",
+            "password": "StrongPass123!",
+        },
+    )
+    assert admin_response.status_code == 201, admin_response.text
+
+    with sync_session_factory() as session:
+        org = session.scalar(select(Organization).where(Organization.slug == "legacy-demo-co"))
+        assert org is not None
+        admin = session.scalar(
+            select(User).where(
+                User.organization_id == org.id,
+                User.email == "legacy.admin@example.com",
+            )
+        )
+        assert admin is not None
+        demo_items = list(
+            session.scalars(select(LeadWorkItem).where(LeadWorkItem.organization_id == org.id))
+        )
+        for item in demo_items:
+            item.assigned_reviewer_id = admin.id
+        session.commit()
+
+    reviewer_client = _client()
+    response = reviewer_client.post(
+        "/auth/signup",
+        json={
+            "mode": "JOIN_ORG_REVIEWER",
+            "organization_slug": "legacy-demo-co",
+            "invite_code": "demo-reviewer-code",
+            "name": "Legacy Reviewer",
+            "email": "legacy.reviewer@example.com",
             "password": "StrongPass123!",
         },
     )
 
     assert response.status_code == 201, response.text
-    assert response.json()["user"]["role"] == "REVIEWER"
     with sync_session_factory() as session:
-        acme = session.scalar(select(Organization).where(Organization.slug == "acme"))
-        assert acme is not None
-        user = session.scalar(
+        org = session.scalar(select(Organization).where(Organization.slug == "legacy-demo-co"))
+        assert org is not None
+        reviewer = session.scalar(
             select(User).where(
-                User.organization_id == acme.id,
-                User.email == "new.reviewer@acme.example",
+                User.organization_id == org.id,
+                User.email == "legacy.reviewer@example.com",
             )
         )
-        assert user is not None
-        assert user.role == UserRole.REVIEWER
-        assigned_item = session.scalar(
-            select(LeadWorkItem)
+        assert reviewer is not None
+        assigned_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
             .where(
-                LeadWorkItem.organization_id == acme.id,
-                LeadWorkItem.assigned_reviewer_id == user.id,
+                LeadWorkItem.organization_id == org.id,
+                LeadWorkItem.assigned_reviewer_id == reviewer.id,
             )
-            .limit(1)
         )
-        assert assigned_item is not None
+        assert assigned_count == 5
 
 
 def test_signup_reviewer_rejects_invalid_invite_code(seeded_database) -> None:

@@ -15,7 +15,10 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.db.demo_work_items import create_signup_demo_work_items
+from app.db.demo_work_items import (
+    assign_signup_demo_work_items_to_reviewer,
+    ensure_signup_demo_work_items,
+)
 from app.db.session import get_async_session
 from app.models.enums import UserRole
 from app.models.organization import Organization
@@ -179,11 +182,14 @@ async def signup(
     session.add(user)
     await session.flush()
     if settings.signup_demo_data_enabled:
-        await create_signup_demo_work_items(
-            session,
-            organization=organization,
-            assignee=user,
-        )
+        if role == UserRole.ADMIN:
+            await ensure_signup_demo_work_items(session, organization=organization, actor=user)
+        else:
+            await assign_signup_demo_work_items_to_reviewer(
+                session,
+                organization=organization,
+                reviewer=user,
+            )
     try:
         await session.commit()
     except IntegrityError as exc:
