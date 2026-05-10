@@ -21,10 +21,13 @@ from app.models.organization import Organization
 from app.models.user import User
 
 
-def _signup_demo_work_item_ids():
+def _signup_demo_work_item_ids(organization: Organization):
     return (
         select(LLMGenerationRun.work_item_id)
-        .where(LLMGenerationRun.provider_raw_metadata.contains({"signup_demo": True}))
+        .where(
+            LLMGenerationRun.organization_id == organization.id,
+            LLMGenerationRun.provider_raw_metadata.contains({"signup_demo": True}),
+        )
         .distinct()
     )
 
@@ -40,7 +43,7 @@ async def ensure_signup_demo_work_items(
         select(LeadWorkItem.id)
         .where(
             LeadWorkItem.organization_id == organization.id,
-            LeadWorkItem.id.in_(_signup_demo_work_item_ids()),
+            LeadWorkItem.id.in_(_signup_demo_work_item_ids(organization)),
         )
         .limit(1)
     )
@@ -50,13 +53,14 @@ async def ensure_signup_demo_work_items(
     scenarios = _scenario_data()[:count]
     for index, scenario in enumerate(scenarios, start=1):
         profile = deepcopy(scenario["profile"])
-        profile["crm"]["owner_name"] = organization.name
         result = _generation_result(profile)
         draft = f"Subject: {result['subject']}\n\n{result['email_body']}"
 
         item = LeadWorkItem(
             organization_id=organization.id,
             assigned_reviewer_id=None,
+            # New signup orgs should begin with actionable review work, even when seed
+            # scenarios later include SENT/FAILED/REJECTED examples for richer demos.
             status=WorkItemStatus.PENDING_REVIEW,
             ai_draft=draft,
             final_draft=draft,
@@ -147,7 +151,7 @@ async def assign_signup_demo_work_items_to_reviewer(
         select(LeadWorkItem)
         .where(
             LeadWorkItem.organization_id == organization.id,
-            LeadWorkItem.id.in_(_signup_demo_work_item_ids()),
+            LeadWorkItem.id.in_(_signup_demo_work_item_ids(organization)),
             or_(
                 LeadWorkItem.assigned_reviewer_id.is_(None),
                 LeadWorkItem.assigned_reviewer_id.in_(admin_user_ids),

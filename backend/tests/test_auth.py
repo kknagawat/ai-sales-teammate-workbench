@@ -106,6 +106,35 @@ def test_signup_creates_new_organization_admin_and_logs_in(seeded_database) -> N
         assert run_count == 5
 
 
+def test_signup_demo_data_can_be_disabled(seeded_database, monkeypatch) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "signup_demo_data_enabled", False)
+    client = _client()
+
+    response = client.post(
+        "/auth/signup",
+        json={
+            "mode": "CREATE_ORG_ADMIN",
+            "organization_name": "No Demo Co",
+            "organization_slug": "no-demo-co",
+            "name": "No Demo Admin",
+            "email": "no.demo.admin@example.com",
+            "password": "StrongPass123!",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    with sync_session_factory() as session:
+        org = session.scalar(select(Organization).where(Organization.slug == "no-demo-co"))
+        assert org is not None
+        item_count = session.scalar(
+            select(func.count())
+            .select_from(LeadWorkItem)
+            .where(LeadWorkItem.organization_id == org.id)
+        )
+        assert item_count == 0
+
+
 def test_signup_reviewer_joins_existing_org_with_invite_code(seeded_database) -> None:
     admin_client = _client()
     admin_response = admin_client.post(

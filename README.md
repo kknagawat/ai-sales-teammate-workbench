@@ -84,7 +84,7 @@ CD is platform-managed instead of custom-scripted:
 - If Redis enqueue fails after approval commits, the app marks the job and item `FAILED` and writes `JOB_FAILED` so reviewers can retry instead of waiting on a stuck `PROCESSING` item.
 - Retry processing can recover failed items, missing processing jobs, and stale active jobs while blocking fresh active jobs to avoid duplicate sends.
 - Signup supports two safe paths: create a new organization as the first admin, or join an existing organization as a reviewer with the server-side invite code.
-- Signup bootstraps demo work items by default (`SIGNUP_DEMO_DATA_ENABLED=true`) so new admins and reviewers can immediately review realistic leads.
+- Signup bootstraps organization-level demo work items by default (`SIGNUP_DEMO_DATA_ENABLED=true`). Admin signup creates demo rows once; reviewer signup attaches existing available demo rows so item statuses are shared instead of duplicated per user.
 - Admins can switch their organization's active AI provider at runtime when `LLM_RUNTIME_SWITCHING_ENABLED=true`. The switch is process-local, org-scoped, audited, guarded server-side, and Claude can only be selected when the backend has `ANTHROPIC_API_KEY` and `ANTHROPIC_MODEL` configured.
 
 ## Background Processing
@@ -220,6 +220,7 @@ pnpm typecheck
 - The free deployment runs the API and worker inside one Render web service, so both sleep together on Render's free tier.
 - Signup does not verify email ownership yet.
 - Reviewer signup uses one demo invite code across organizations. A production version should use per-organization invite records with expiry, single-use consumption, and audit history.
+- If all signup-demo work items in an organization are already assigned to reviewers, a later reviewer may join with an empty queue until an assignment UI exists.
 - Signup and organization creation are not written to `audit_logs` yet; the audit trail currently focuses on work-item review and processing actions.
 - Signup demo work items are cloned from the local demo scenarios. A production product would create real work from CRM/import events instead.
 - Password validation uses length, character-class, and small common-password checks. A production version should use entropy-based scoring and breached-password checks.
